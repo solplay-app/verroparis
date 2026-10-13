@@ -1,0 +1,61 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        // Le joueur peut UNIQUEMENT créer son profil, avec solde 0 et sans droits admin.
+        // Ensuite plus aucune écriture client : solde et isAdmin ne bougent que via le serveur / la console.
+        ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.child('id').val() === $uid && newData.child('balance').val() === 0 && newData.child('isAdmin').val() === false"
+      }
+    },
+
+    "matchesCache": { ".read": true, ".write": false },
+    "oddsCache":    { ".read": true, ".write": false },
+
+    "coupons": {
+      ".indexOn": ["userId", "status"],
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() === true || (query.orderByChild === 'userId' && query.equalTo === auth.uid))",
+      "$couponId": {
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        ".write": false
+      }
+    },
+
+    "deposits": {
+      ".indexOn": ["userId"],
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() === true || (query.orderByChild === 'userId' && query.equalTo === auth.uid))",
+      "$id": { ".write": false }
+    },
+    "withdrawals": {
+      ".indexOn": ["userId", "status"],
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() === true || (query.orderByChild === 'userId' && query.equalTo === auth.uid))",
+      "$id": { ".write": false }
+    },
+
+    "draftCoupons": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    // Ancien système de dépôt manuel : lecture admin seulement, plus d'écriture.
+    "fundRequests": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true",
+      "$reqId": { ".write": false }
+    },
+    "paymentMethods": {
+      ".read": true,
+      ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+    },
+
+    "messages": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
+      }
+    }
+    // results/ et trackedMatches/ : aucune règle = inaccessibles aux clients (serveur seulement).
+  }
+}

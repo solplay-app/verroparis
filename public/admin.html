@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex"><title>Verroparis — Admin</title>
+<style>
+:root{--bg:#0E1B2B;--card:#142436;--line:#253952;--tx:#fff;--mut:#8B95A3;--ok:#10b981;--ko:#ef4444}
+@media (prefers-color-scheme:light){:root{--bg:#f3f5f8;--card:#fff;--line:#d5dce6;--tx:#0E1B2B;--mut:#5b6877}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) 12px 40px}
+h1{font-size:18px;margin:4px 0 12px}h2{font-size:14px;margin:22px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.mut{color:var(--mut);font-size:12px}
+input{padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--tx);width:100%;margin-bottom:8px;font-size:14px}
+input.s{width:70px;margin:0}
+button{padding:10px 14px;border-radius:10px;border:0;font-weight:700;cursor:pointer;color:#fff;background:var(--ok)}
+button.ko{background:var(--ko)}button.gr{background:transparent;border:1px solid var(--line);color:var(--tx)}
+#err{color:var(--ko);min-height:18px;margin:6px 0}
+</style></head><body>
+<h1>Administration — Verroparis</h1>
+<div id="login" class="card"><input id="em" type="email" placeholder="E-mail admin" autocomplete="username"><input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password"><button id="go">Connexion</button></div>
+<div id="err"></div>
+<div id="app" hidden>
+  <div class="row"><button class="gr" id="refresh">Actualiser</button><button class="gr" id="out">Déconnexion</button></div>
+  <h2>Retraits à verser</h2><div id="wd"></div>
+  <h2>Matchs sans résultat (&gt; 3 h)</h2><div id="un"></div>
+  <h2>Dépôts à vérifier</h2><div id="dp"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+firebase.initializeApp({apiKey:"AIzaSyBFvO1ZWrlW_Qz4Rwb65FjnyjbCz5oGXmM",authDomain:"verroparis.firebaseapp.com",projectId:"verroparis",appId:"1:80814733541:web:a0de7f0724ab27e300fc0c"});
+const $=id=>document.getElementById(id);
+function h(tag,css,text){const e=document.createElement(tag);if(css)e.className=css;if(text!==undefined)e.textContent=text;return e}
+async function call(body){const t=await firebase.auth().currentUser.getIdToken();const r=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d}
+const fcfa=n=>Number(n).toLocaleString('fr-FR')+' FCFA';
+function btn(label,cls,fn){const b=h('button',cls,label);b.onclick=async()=>{b.disabled=true;try{await fn();await load()}catch(e){$('err').textContent=e.message;b.disabled=false}};return b}
+async function load(){
+  $('err').textContent='';
+  const d=await call({action:'list'});
+  const wd=$('wd'),un=$('un'),dp=$('dp');wd.replaceChildren();un.replaceChildren();dp.replaceChildren();
+  if(!d.withdrawals.length)wd.append(h('div','mut','Aucun retrait en attente.'));
+  d.withdrawals.forEach(w=>{const c=h('div','card');
+    c.append(h('b','',fcfa(w.amount)+' — '+w.paymentMethod),h('div','mut',w.phone+' · '+(w.userEmail||w.userId)+' · '+new Date(w.createdAt).toLocaleString('fr-FR')));
+    const r=h('div','row');
+    r.append(btn('Versé ✔','',()=>confirm('Confirmer que '+fcfa(w.amount)+' a bien été envoyé au '+w.phone+' ?')?call({action:'withdrawal',id:w.id,decision:'paid'}):0),
+             btn('Refuser (rembourser)','ko',()=>confirm('Refuser et rembourser le joueur ?')?call({action:'withdrawal',id:w.id,decision:'reject'}):0));
+    c.append(r);wd.append(c)});
+  if(!d.unresolved.length)un.append(h('div','mut','Aucun.'));
+  d.unresolved.forEach(m=>{const c=h('div','card');c.append(h('b','',m.homeTeam+' – '+m.awayTeam),h('div','mut',new Date(m.commenceTime).toLocaleString('fr-FR')));
+    const a=h('input','s'),b=h('input','s');a.type=b.type='number';a.min=b.min=0;a.placeholder='dom.';b.placeholder='ext.';a.className=b.className='s';
+    const r=h('div','row');r.append(a,b,btn('Enregistrer','',()=>call({action:'setResult',matchId:m.id,homeScore:a.value,awayScore:b.value})),btn('Annulé (rembourser)','ko',()=>call({action:'setResult',matchId:m.id,void:true})));
+    c.append(r);un.append(c)});
+  if(!d.deposits.length)dp.append(h('div','mut','Aucun.'));
+  d.deposits.forEach(x=>{const c=h('div','card');c.append(h('b','',fcfa(x.amount)+' — '+x.status),h('div','mut',x.reference+' · '+x.userId+' · Jèko: '+(x.jekoId||'-')));dp.append(c)});
+}
+$('go').onclick=async()=>{try{await firebase.auth().signInWithEmailAndPassword($('em').value,$('pw').value)}catch(e){$('err').textContent='Connexion refusée'}};
+$('out').onclick=()=>firebase.auth().signOut();$('refresh').onclick=()=>load().catch(e=>$('err').textContent=e.message);
+firebase.auth().onAuthStateChanged(async u=>{$('login').hidden=!!u;$('app').hidden=!u;if(u)try{await load()}catch(e){$('err').textContent=e.message}});
+</script></body></html>

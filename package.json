@@ -1,0 +1,11 @@
+{
+  "name": "verroparis-payments",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node test/jeko.test.js && node test/server.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}
